@@ -1,6 +1,9 @@
 # FFmpeg_iOS
 iOS使用FFmpeg命令行工具fftools转码视频，包含转码进度等
 
+#### iOS工程
+- Swift
+- iOS9+
 
 #### FFmpeg版本支持
 - 最新FFmpeg4.2
