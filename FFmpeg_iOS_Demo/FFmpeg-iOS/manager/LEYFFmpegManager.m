@@ -1,0 +1,179 @@
+//
+//  LEYFFmpegManager.m
+//  FFmpeg_iOS_Demo
+//
+//  Created by panf on 2019/8/16.
+//  Copyright © 2019 无码科技. All rights reserved.
+//
+
+#import "LEYFFmpegManager.h"
+#import "ffmpeg.h"
+
+
+@interface LEYFFmpegManager ()
+
+@property (nonatomic, assign) BOOL isRuning;
+@property (nonatomic, assign) BOOL isBegin;
+@property (nonatomic, assign) long long fileDuration;
+@property (nonatomic, copy) void (^processBlock)(float process);
+@property (nonatomic, copy) void (^completionBlock)(NSError *error);
+
+@end
+
+@implementation LEYFFmpegManager
+
++ (LEYFFmpegManager *)shared {
+    static dispatch_once_t once;
+    static id instance;
+    dispatch_once(&once, ^{
+        instance = [self new];
+    });
+    return instance;
+}
+
+
+
+
+//- (void)converWithInputPath:(NSString *)inputPath
+//                 outputPath:(NSString *)outpath
+//               processBlock:(void (^)(float process))processBlock
+//            completionBlock:(void (^)(NSError *error))completionBlock {
+//    int argc = 4;
+//    char **arguments = calloc(argc, sizeof(char*));
+//    if(arguments != NULL)
+//    {
+//        arguments[0] = "ffmpeg";
+//        arguments[1] = "-i";
+//        arguments[2] = (char *)[inputPath UTF8String];
+//        arguments[3] = (char *)[outpath UTF8String];
+//
+//        if (!ffmpeg_main(argc, arguments)) {
+//            NSLog(@"生成成功");
+//        }
+//    }
+//}
+
+
+
+
+//- (void)converWithInputPath:(NSString *)inputPath
+//                 outputPath:(NSString *)outpath
+//               processBlock:(void (^)(float process))processBlock
+//            completionBlock:(void (^)(NSError *error))completionBlock {
+//    self.processBlock = processBlock;
+//    self.completionBlock = completionBlock;
+//    self.isBegin = NO;
+//
+//    dispatch_async(dispatch_get_global_queue(0, 0), ^{
+//        NSString *moviePath = [[NSBundle mainBundle] pathForResource:@"movie" ofType:@"mp4"];
+//        NSString *imageName = @"image%d.jpg";
+//        NSString *imagesPath = [NSString stringWithFormat:@"%@/%@", [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject], imageName];
+//
+//        int numberOfArgs = 6;
+//        char** arguments = calloc(numberOfArgs, sizeof(char*));
+//
+//        arguments[0] = "ffmpeg";
+//        arguments[1] = "-i";
+//        arguments[2] = (char *)[moviePath UTF8String];
+//        arguments[3] = "-r";
+//        arguments[4] = "20";
+//        arguments[5] = (char *)[imagesPath UTF8String];
+//
+//        int result = ffmpeg_main(numberOfArgs, arguments);
+//        NSLog(@"----------- %d", result);
+//        dispatch_async(dispatch_get_main_queue(), ^{
+//
+//        });
+//
+//    });
+//}
+//
+//
+
+
+
+
+
+
+
+
+
+ //转换视频
+- (void)converWithInputPath:(NSString *)inputPath
+                 outputPath:(NSString *)outpath
+               processBlock:(void (^)(float process))processBlock
+            completionBlock:(void (^)(NSError *error))completionBlock {
+    self.processBlock = processBlock;
+    self.completionBlock = completionBlock;
+    self.isBegin = NO;
+
+    // ffmpeg语法，可根据需求自行更改      !#$ 为分割标记符，也可以使用空格代替
+    NSString *commandStr = [NSString stringWithFormat:@"ffmpeg!#$-ss!#$00:00:00!#$-i!#$%@!#$-b:v!#$2000K!#$-y!#$%@", inputPath, outpath];
+
+    [[[NSThread alloc] initWithTarget:self selector:@selector(runCmd:) object:commandStr] start];
+}
+
+
+// 执行指令
+- (void)runCmd:(NSString *)commandStr{
+    // 判断转换状态
+    if (self.isRuning) {
+        NSLog(@"正在转换,稍后重试");
+    }
+    self.isRuning = YES;
+
+    // 根据 !#$ 将指令分割为指令数组
+    NSArray *argv_array = [commandStr componentsSeparatedByString:(@"!#$")];
+    // 将OC对象转换为对应的C对象
+    int argc = (int)argv_array.count;
+    char** argv = (char**)malloc(sizeof(char*)*argc);
+    for(int i=0; i < argc; i++) {
+        argv[i] = (char*)malloc(sizeof(char)*1024);
+        strcpy(argv[i],[[argv_array objectAtIndex:i] UTF8String]);
+    }
+
+    
+    ffmpeg_main(argc,argv);
+}
+
+
+
+
+
++ (void)setDuration:(long long)time {
+    [LEYFFmpegManager shared].fileDuration = time;
+}
+
++ (void)setCurrentTime:(long long)time {
+    LEYFFmpegManager *mgr = [LEYFFmpegManager shared];
+    mgr.isBegin = YES;
+    
+    if (mgr.processBlock && mgr.fileDuration) {
+        float process = time/(mgr.fileDuration * 1.00);
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            mgr.processBlock(process);
+        });
+    }
+}
+
++ (void)stopRuning {
+    LEYFFmpegManager *mgr = [LEYFFmpegManager shared];
+    NSError *error = nil;
+    if (!mgr.isBegin) {
+        // 判断是否开始过，没开始过就设置失败
+        error = [NSError errorWithDomain:@"转换失败,请检查源文件的编码格式!"
+                                    code:0
+                                userInfo:nil];
+    }
+    if (mgr.completionBlock) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            mgr.completionBlock(error);
+        });
+    }
+    
+    mgr.isRuning = NO;
+}
+
+
+@end
