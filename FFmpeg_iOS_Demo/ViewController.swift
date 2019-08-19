@@ -15,10 +15,6 @@ class ViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-//        let inputPath = Bundle.main.path(forResource: "video", ofType: "mp4") ?? ""
-//        let doc = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first ?? ""
-//        let outputPath = (doc as! NSString).appendingPathComponent("videoConver.mov")
-        
     
         
         let inputPath = Bundle.main.path(forResource: "video", ofType: "MOV") ?? ""
@@ -29,10 +25,12 @@ class ViewController: UIViewController {
             try? FileManager.default.removeItem(atPath: outputPath)
         }
 
-        LEYFFmpegManager.shared().conver(withInputPath: inputPath, outputPath: outputPath, processBlock: { value in
+        
+        
+        LEYFFmpegManager.shared().conver(withInputPath: inputPath, outputPath: outputPath, originTime: 0, converTotalTime: 100, processBlock: { (value) in
             print("value is : \(value)")
         }) { (error) in
-            
+            print("裁剪、转码结束")
         }
 
     }

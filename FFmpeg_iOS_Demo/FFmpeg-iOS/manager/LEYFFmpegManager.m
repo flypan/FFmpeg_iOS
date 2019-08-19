@@ -18,6 +18,9 @@
 @property (nonatomic, copy) void (^processBlock)(float process);
 @property (nonatomic, copy) void (^completionBlock)(NSError *error);
 
+@property (nonatomic, assign) long long originTime;
+@property (nonatomic, assign) long long converTotalTime;
+
 @end
 
 @implementation LEYFFmpegManager
@@ -32,89 +35,27 @@
 }
 
 
-
-
-//- (void)converWithInputPath:(NSString *)inputPath
-//                 outputPath:(NSString *)outpath
-//               processBlock:(void (^)(float process))processBlock
-//            completionBlock:(void (^)(NSError *error))completionBlock {
-//    int argc = 4;
-//    char **arguments = calloc(argc, sizeof(char*));
-//    if(arguments != NULL)
-//    {
-//        arguments[0] = "ffmpeg";
-//        arguments[1] = "-i";
-//        arguments[2] = (char *)[inputPath UTF8String];
-//        arguments[3] = (char *)[outpath UTF8String];
-//
-//        if (!ffmpeg_main(argc, arguments)) {
-//            NSLog(@"生成成功");
-//        }
-//    }
-//}
-
-
-
-
-//- (void)converWithInputPath:(NSString *)inputPath
-//                 outputPath:(NSString *)outpath
-//               processBlock:(void (^)(float process))processBlock
-//            completionBlock:(void (^)(NSError *error))completionBlock {
-//    self.processBlock = processBlock;
-//    self.completionBlock = completionBlock;
-//    self.isBegin = NO;
-//
-//    dispatch_async(dispatch_get_global_queue(0, 0), ^{
-//        NSString *moviePath = [[NSBundle mainBundle] pathForResource:@"movie" ofType:@"mp4"];
-//        NSString *imageName = @"image%d.jpg";
-//        NSString *imagesPath = [NSString stringWithFormat:@"%@/%@", [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject], imageName];
-//
-//        int numberOfArgs = 6;
-//        char** arguments = calloc(numberOfArgs, sizeof(char*));
-//
-//        arguments[0] = "ffmpeg";
-//        arguments[1] = "-i";
-//        arguments[2] = (char *)[moviePath UTF8String];
-//        arguments[3] = "-r";
-//        arguments[4] = "20";
-//        arguments[5] = (char *)[imagesPath UTF8String];
-//
-//        int result = ffmpeg_main(numberOfArgs, arguments);
-//        NSLog(@"----------- %d", result);
-//        dispatch_async(dispatch_get_main_queue(), ^{
-//
-//        });
-//
-//    });
-//}
-//
-//
-
-
-
-
-
-
-
-
-
- //转换视频
 - (void)converWithInputPath:(NSString *)inputPath
-                 outputPath:(NSString *)outpath
-               processBlock:(void (^)(float process))processBlock
+     outputPath:(NSString *)outpath
+     originTime:(long long)originTime
+converTotalTime:(long long)converTotalTime
+   processBlock:(void (^)(float process))processBlock
             completionBlock:(void (^)(NSError *error))completionBlock {
     self.processBlock = processBlock;
     self.completionBlock = completionBlock;
     self.isBegin = NO;
-
+    
+    self.originTime = originTime;
+    self.converTotalTime = converTotalTime;
+    
     // ffmpeg语法，可根据需求自行更改      !#$ 为分割标记符，也可以使用空格代替
-    NSString *commandStr = [NSString stringWithFormat:@"ffmpeg!#$-ss!#$00:00:00!#$-i!#$%@!#$-b:v!#$2000K!#$-y!#$%@", inputPath, outpath];
+    NSString *commandStr = [NSString stringWithFormat:@"ffmpeg!#$-ss!#$%lld!#$-t!#$%lld!#$-i!#$%@!#$-b:v!#$2000K!#$-y!#$%@",originTime, converTotalTime, inputPath, outpath];
 
     [[[NSThread alloc] initWithTarget:self selector:@selector(runCmd:) object:commandStr] start];
 }
 
 
-// 执行指令
+
 - (void)runCmd:(NSString *)commandStr{
     // 判断转换状态
     if (self.isRuning) {
@@ -124,14 +65,14 @@
 
     // 根据 !#$ 将指令分割为指令数组
     NSArray *argv_array = [commandStr componentsSeparatedByString:(@"!#$")];
-    // 将OC对象转换为对应的C对象
+
+    
     int argc = (int)argv_array.count;
     char** argv = (char**)malloc(sizeof(char*)*argc);
     for(int i=0; i < argc; i++) {
         argv[i] = (char*)malloc(sizeof(char)*1024);
         strcpy(argv[i],[[argv_array objectAtIndex:i] UTF8String]);
     }
-
     
     ffmpeg_main(argc,argv);
 }
@@ -149,7 +90,8 @@
     mgr.isBegin = YES;
     
     if (mgr.processBlock && mgr.fileDuration) {
-        float process = time/(mgr.fileDuration * 1.00);
+        float total = MIN(mgr.fileDuration - mgr.originTime, mgr.converTotalTime);
+        float process = time/(total * 1.00);
         
         dispatch_async(dispatch_get_main_queue(), ^{
             mgr.processBlock(process);
